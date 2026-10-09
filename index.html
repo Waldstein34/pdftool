@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PDFツール</title>
+<meta name="description" content="ブラウザで動く PDF ビュワー。ペン・マーカー・付箋・図形で書き込み、書き込みごと保存できます。PDF はどこにも送られません。">
+<meta name="theme-color" content="#323639">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="notes_app/notes.css">
+<link rel="stylesheet" href="pdf_app/pdf.css">
+<style>
+  html,body{margin:0;height:100%;overflow:hidden}
+  #root{position:relative;z-index:1;height:100%;box-sizing:border-box}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<!-- 書き込みの部品（notes_app/）は、Studio のノートと同じもの。つなぎ役（pdf_bridge.js）を先に読む -->
+<script src="pdf_app/pdf_bridge.js"></script>
+<script src="pdf_app/pdf_io_browser.js"></script>
+<script src="notes_app/notes_free.js"></script>
+<script src="notes_app/notes_guide.js"></script>
+<script src="notes_app/notes_ink.js"></script>
+<script src="notes_app/notes_icons_std.js"></script>
+<script src="notes_app/notes_icons.js"></script>
+<script src="notes_app/notes_pdfout.js"></script>
+<script src="pdf_app/pdf_core.js"></script>
+<script src="pdf_app/pdf_write.js"></script>
+<script src="pdf_app/pdf_theme.js"></script>
+<script>
+  Notes._S.base = ".";
+  Object.assign(Notes._S.tree.settings, PdfTool.io.initialSettings());
+  PdfTool.mount(document.getElementById("root"), { base: ".", standalone: true });
+  // オフラインでも開けるように（アプリとして入れられるようにする）
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
