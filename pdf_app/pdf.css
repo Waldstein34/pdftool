@@ -143,12 +143,16 @@ html[data-pt-theme="night"] .pt-prog{display:block;position:absolute;left:0;righ
 .pt-prog i{display:block;height:100%;width:0;background:var(--pt-accent);transition:width .2s}
 
 /* 文字の層（選んでコピーできる・検索で光らせる）。pdf.js の pdf_viewer.css の必要な部分だけ */
-.pt-page .textLayer{position:absolute;text-align:initial;inset:0;overflow:hidden;line-height:1;text-size-adjust:none;forced-color-adjust:none;transform-origin:0 0;z-index:2}
+/* 選んだ所の色は「透けない色」にして、層全体をまとめて薄くする（pdf.js 公式ビュワーと同じやり方）。
+   文字は細かいかたまりに分かれて重なっているので、半透明の色を塗ると重なりが濃い縦線になる */
+.pt-page .textLayer{position:absolute;text-align:initial;inset:0;overflow:hidden;line-height:1;text-size-adjust:none;forced-color-adjust:none;transform-origin:0 0;z-index:2;opacity:.3}
 .pt-page .textLayer span,.pt-page .textLayer br{color:transparent;position:absolute;white-space:pre;cursor:text;transform-origin:0% 0%}
-.pt-page .textLayer ::selection{background:rgba(40,110,255,.32)}
+/* ブラウザの塗りは消し、pdf_core.js の paintSel() が1行ずつ1本の帯（.pt-selbar）を描く */
+.pt-page .textLayer ::selection{background:transparent}
+.pt-selbar{position:absolute;z-index:1;pointer-events:none;background:rgba(0,95,255,.28);mix-blend-mode:multiply;border-radius:1px}
 .pt-page .textLayer .endOfContent{display:block;position:absolute;inset:100% 0 0;z-index:-1;cursor:default;user-select:none}
-.pt-page .textLayer .pt-hit{background:rgba(255,200,0,.45);border-radius:2px}
-.pt-page .textLayer .pt-hit.pt-cur{background:rgba(255,120,0,.6)}
+.pt-page .textLayer .pt-hit{background:rgb(255,190,0);border-radius:2px}
+.pt-page .textLayer .pt-hit.pt-cur{background:rgb(255,100,0)}
 
 /* ノートの部品の名前（.nb-b・.nb-pdf-page）を借りているので、ノートの見た目の決まりを打ち消す */
 .pt-pages.nb-b{display:flex;flex-direction:column;align-items:center;position:static}

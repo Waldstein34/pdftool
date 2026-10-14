@@ -163,6 +163,9 @@
       else if (e.key === "Escape") { U.sin.value = ""; setQuery(""); }
     });
     U.sin.addEventListener("input", () => { if (!U.sin.value) setQuery(""); });
+    // 文字を選んだ範囲を、1行ずつ1本の帯で描く（ブラウザの塗りは、かたまりの間が切れたり高さがガタガタになるため使わない）
+    let selRaf = 0;
+    document.addEventListener("selectionchange", () => { if (!selRaf) selRaf = requestAnimationFrame(() => { selRaf = 0; paintSel(); }); });
 
     // スクロール：今のページを追う
     let raf = 0;
@@ -383,6 +386,7 @@
     p.el.append(cv, tl);
     p.divs = divs; p.strs = strs;
     markHits(p);
+    paintSel();
   }
 
   /* ---------------- ページ移動 ---------------- */
@@ -523,6 +527,47 @@
     for (const p of S.pages) markHits(p);
     const p = S.pages[h.n - 1];
     if (!p.divs) goTo(h.n);   // まだ描いていないページなら、まずそこへ（描き終わると光る）
+  }
+
+  /* ---------------- 選んだ文字の帯 ---------------- */
+  // かたまり（span）ごとに、選ばれている部分の四角を集め、同じ行のものを1本にまとめて描く
+  function paintSel() {
+    if (!S.root) return;
+    S.root.querySelectorAll(".pt-selbar").forEach(b => b.remove());
+    const sel = getSelection();
+    if (!sel || !sel.rangeCount || sel.isCollapsed || !S.doc) return;
+    const range = sel.getRangeAt(0);
+    for (const p of S.pages) {
+      if (!p.divs || !p.el.isConnected || !range.intersectsNode(p.el)) continue;
+      const pr = p.el.getBoundingClientRect();
+      const boxes = [];
+      for (const d of p.divs) {
+        const tn = d.firstChild;
+        if (!tn || tn.nodeType !== 3 || !range.intersectsNode(d)) continue;
+        const sub = document.createRange();
+        sub.selectNodeContents(tn);
+        if (range.startContainer === tn) sub.setStart(tn, range.startOffset);
+        if (range.endContainer === tn) sub.setEnd(tn, range.endOffset);
+        if (sub.collapsed || !sub.toString().trim()) continue;
+        const r = sub.getBoundingClientRect();
+        if (r.width < 0.5 || r.height < 0.5) continue;
+        boxes.push({ l: r.left - pr.left, t: r.top - pr.top, r: r.right - pr.left, b: r.bottom - pr.top });
+      }
+      // 行ごとにまとめる：縦に半分以上重なっていれば同じ行
+      boxes.sort((a, b) => a.t - b.t || a.l - b.l);
+      const lines = [];
+      for (const x of boxes) {
+        const h = x.b - x.t;
+        const ln = lines.find(L => Math.min(L.b, x.b) - Math.max(L.t, x.t) >= Math.min(h, L.b - L.t) * 0.5);
+        if (ln) { ln.l = Math.min(ln.l, x.l); ln.r = Math.max(ln.r, x.r); ln.t = Math.min(ln.t, x.t); ln.b = Math.max(ln.b, x.b); }
+        else lines.push({ ...x });
+      }
+      for (const L of lines) {
+        const bar = el("div", "pt-selbar");
+        Object.assign(bar.style, { left: L.l + "px", top: L.t + "px", width: L.r - L.l + "px", height: L.b - L.t + "px" });
+        p.el.appendChild(bar);
+      }
+    }
   }
 
   // 1ページの文字の層に、見つかった所の印を付ける
