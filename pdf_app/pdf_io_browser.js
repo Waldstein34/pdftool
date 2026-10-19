@@ -178,6 +178,28 @@
       setTimeout(() => URL.revokeObjectURL(a.href), 60000);
       return { ok: true, name: out, message: `「${out}」をダウンロードに保存しました` };
     },
+    // 変換したファイルなどを保存する（保存先を選ぶ窓。出せないブラウザはダウンロード）
+    async saveFile(ref, name, bytes) {
+      const ext = (name.match(/\.[a-z0-9]+$/i) || [".bin"])[0].toLowerCase();
+      const mime = { ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".png": "image/png", ".jpg": "image/jpeg", ".txt": "text/plain", ".zip": "application/zip", ".pdf": "application/pdf" }[ext] || "application/octet-stream";
+      if (window.showSaveFilePicker) {
+        let h;
+        try { h = await showSaveFilePicker({ suggestedName: name, startIn: (ref && ref.handle) || "documents", types: [{ description: ext.slice(1).toUpperCase(), accept: { [mime]: [ext] } }] }); }
+        catch (e) { if (e.name === "AbortError") return { cancelled: true }; throw e; }
+        const w = await h.createWritable();
+        await w.write(bytes); await w.close();
+        return { ok: true, name: h.name, message: `「${h.name}」を保存しました` };
+      }
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([bytes], { type: mime }));
+      a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+      return { ok: true, name, message: `「${name}」をダウンロードに保存しました` };
+    },
     alive: async () => true,
     downMessage: "",
     // アプリとして入れたとき：PDF をダブルクリックしたら、そのファイルを受け取って開く

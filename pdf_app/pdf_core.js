@@ -20,7 +20,7 @@
     q: "", hits: [], hitIdx: -1, texts: null, wantScroll: false,
   };
   // 機能を足す窓口（pdf_write.js が書き込みを付ける）。open({buf, key, name, ref, url}) / close() / layout() / save()
-  const hooks = P.hooks = { open: [], close: [], layout: [], save: [], page: [], theme: [], mount: [] };
+  const hooks = P.hooks = { open: [], close: [], layout: [], save: [], page: [], theme: [], mount: [], print: [], convert: [] };
   const fire = (k, ...a) => hooks[k].forEach(f => { try { f(...a); } catch (e) { console.error(e); } });
   const ZOOMS = [0.25, 0.33, 0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5];
 
@@ -38,6 +38,8 @@
     moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
     file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M10 13H8M16 17H8M16 13h-2"/>',
     check: '<path d="M20 6 9 17l-5-5"/>',
+    convert: '<path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M4 7V4a2 2 0 0 1 2-2h8l6 6v12a2 2 0 0 1-2 2h-4"/><path d="m5 11-3 3 3 3M9 17l3-3-3-3M2 14h10"/>',
+    print: '<path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
   };
   P.ICONS = ICONS;
   P.icon = (k, cls) => `<svg class="pt-svg${cls ? " " + cls : ""}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[k] || ""}</svg>`;
@@ -63,6 +65,7 @@
   }
 
   let pdfjs = null;
+  P.loadPdfJs = () => loadPdfJs();
   function loadPdfJs() {
     if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
     if (pdfjs) return pdfjs;
@@ -97,6 +100,8 @@
         <span class="pt-slot pt-slot-top pt-doc"></span>
         <span class="pt-search pt-doc">${I("search")}<input placeholder="PDFの中を検索" title="Enter で次、Shift＋Enter で前（Ctrl＋F）"><span class="pt-hits"></span><button data-a="sprev" title="前">${I("up")}</button><button data-a="snext" title="次">${I("down")}</button></span>
         <button class="pt-btn pt-doc" data-a="save" title="書き込みを重ねた PDF を保存（元の PDF はそのまま）">${I("save")}<span class="pt-lbl">書き込みごと保存</span></button>
+        <button class="pt-ic pt-doc" data-a="convert" title="ほかの形に変換して保存（PowerPoint など）">${I("convert")}</button>
+        <button class="pt-ic pt-doc" data-a="print" title="印刷（Ctrl＋P）。書き込みがあれば書き込みごと">${I("print")}</button>
         <span class="pt-slot pt-slot-extra"></span>
         <button class="pt-ic" data-a="theme" title="見た目（テーマ）を変える">${I("palette")}</button>
       </div>
@@ -148,6 +153,8 @@
       else if (a === "zin" || a === "zout") zoomStep(a === "zin" ? 1 : -1);
       else if (a === "fit") { S.fit = true; relayout(); }
       else if (a === "save") fire("save");
+      else if (a === "print") fire("print");
+      else if (a === "convert") fire("convert", b);
       else if (a === "theme") fire("theme", b);
       else if (a === "snext") search(1);
       else if (a === "sprev") search(-1);

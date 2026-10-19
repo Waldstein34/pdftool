@@ -131,5 +131,28 @@
     }
   });
 
+  /* 変換したファイルなどを保存して知らせる（pdf_convert.js などが使う）。居場所のわからない PDF はダウンロードへ */
+  P.saveOut = async (name, bytes) => {
+    const c = cur || { ref: S.ref };
+    let w;
+    if (!c.ref && io().kind === "server") {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([bytes])); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+      w = { ok: true, name, message: `「${name}」をダウンロードに保存しました` };
+    } else {
+      w = await io().saveFile(c.ref, name, bytes, false);
+      if (w.exists) {
+        if (!confirm(`「${w.name}」はもうあります。上書きしますか？`)) return { cancelled: true };
+        w = await io().saveFile(c.ref, name, bytes, true);
+      }
+    }
+    if (w.cancelled) return w;
+    if (!w.ok) throw new Error(w.error || "保存できませんでした");
+    toast(w.message, 6000);
+    return w;
+  };
+
   P.Write = { flush, _: { get cur() { return cur; } } };
 })();

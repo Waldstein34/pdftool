@@ -10,6 +10,7 @@
 | [@pdf-lib/fontkit](https://github.com/Hopding/fontkit) 1.1.1（`fontkit.umd.min.js`） | 書体を PDF に入れる | MIT License | Copyright (c) 2014 Devon Govett |
 | [Lucide](https://lucide.dev)（`lucide-icons.js`） | アイコン | ISC License | Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT). All other copyright (c) for Lucide are held by Lucide Contributors 2022. |
 | [Emojibase](https://emojibase.dev)（`emoji-ja.json`） | 絵文字の一覧と日本語の名前 | MIT License（`emoji-LICENSE.txt`） | Copyright (c) 2017-2019 Miles Johnson |
+| [PptxGenJS](https://github.com/gitbrent/PptxGenJS) 3.12.0（`pdf_app/vendor/pptxgen.bundle.js`） | PowerPoint への変換 | MIT License（`pptxgenjs-LICENSE.txt`）。中に [JSZip](https://stuk.github.io/jszip/)（MIT License を選んで利用。MIT と GPLv3 のどちらか）を含む | Copyright (c) 2015-2022 Brent Ely／Copyright (c) 2009-2016 Stuart Knightley, David Duponchel, Franz Buchinger, António Afonso |
 | [BIZ UDゴシック](https://github.com/googlefonts/morisawa-biz-ud-gothic)（`BIZUDGothic-Regular.ttf`） | 書き込みごと保存の文字の書体 | SIL Open Font License 1.1（`BIZUDGothic-OFL.txt`） | Copyright 2022 The BIZ UDGothic Project Authors |
 
 - Windows 標準アイコン（Segoe Fluent Icons）は、書体そのものは含まず、使う人のパソコンに入っている書体で表示します（`segoe-fluent.json` は名前の一覧だけ）。

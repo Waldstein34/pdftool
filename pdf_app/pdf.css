@@ -255,3 +255,15 @@ html[data-pt-theme="glass"] .pt-openbig{background:var(--pt-on) !important;color
   .pt-search input{width:70px}
   .pt-name{max-width:140px}
 }
+
+/* ================= 印刷（pdf_print.js） ================= */
+.pt-print{display:none}
+@media print{
+  @page{margin:0}
+  html,body{height:auto !important;overflow:visible !important;background:#fff !important}
+  body::before{display:none !important}
+  body > *:not(.pt-print){display:none !important}
+  .pt-print{display:block}
+  .pt-print img{display:block;width:100%;height:auto;max-height:100vh;object-fit:contain;break-after:page;page-break-after:always}
+  .pt-print img:last-child{break-after:auto;page-break-after:auto}
+}
