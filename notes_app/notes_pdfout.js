@@ -13,6 +13,8 @@
      （Windows の Segoe UI＝英数字、Yu Gothic UI＝日本語。ノートのサーバーの /api/notes/sysfont から受け取る）を
      vendor/fontkit.umd.min.js で読み、使った文字だけを PDF に入れる。見つからないときは同梱の BIZ UDゴシック（SIL OFL）。
      行の切れ目と1文字ずつの位置は画面と同じ。書体にない文字（絵文字など）だけは、シートに絵で描く。付箋の黄色い地もシートに描く
+   ・書体を選んだ付箋・テキスト（ff）は、その書体を PDF に入れる（ないときは上の標準の書体）。サーバーがない公開版では、
+     ブラウザが許せば（Chrome・Edge の「フォントの使用」）パソコンの書体を読む。PDF の上の文字の大きさ（fsr）はページの幅に対する割合
    窓口：Notes.PdfOut.button(ブロック, ファイルのURL) → ボタン、Notes.PdfOut.build(行id, ファイルのURL) → PDF の中身（テスト用）
    ===================================================================== */
 window.Notes = window.Notes || {};
@@ -71,12 +73,34 @@ window.Notes = window.Notes || {};
     if (!b || b.byteLength < 1000) throw new Error("書体がありません");
     return (bytesCache[key] = b);
   }
+  const mkFont = font => ({ font, chars: new Set(font.getCharacterSet()) });
+  /* パソコンの書体のファイルを読む。ノートのサーバーから。なければ、ブラウザのフォントの窓口（Chrome・Edge。初回は許可を聞かれる） */
+  async function sysBytes(name, ps) {
+    try { return await getBytes(name, `${N._S.base || ""}/api/notes/sysfont?name=${name}`); }
+    catch (e) {
+      if (!window.queryLocalFonts) throw e;
+      const fd = (await window.queryLocalFonts({ postscriptNames: [ps] }))[0];
+      if (!fd) throw e;
+      const b = await (await fd.blob()).arrayBuffer();
+      if (b.byteLength < 1000) throw e;
+      return (bytesCache[name] = b);
+    }
+  }
+  // まとめファイル（.ttc）なら、中の名前（ps）で1つ選んで入れる
+  async function embedSys(doc, fk, name, ps) {
+    const b = await sysBytes(name, ps);
+    const ttc = new TextDecoder().decode(new Uint8Array(b, 0, 4)) === "ttcf";
+    doc.registerFontkit(ttc ? { create: bb => fk.create(bb, ps) } : fk);
+    try { return mkFont(await doc.embedFont(b, { subset: true })); } finally { doc.registerFontkit(fk); }
+  }
+  // 付箋・テキストの書体（ff）→ まとめファイルの中の名前（ファイルはノートのサーバーの SYS_FONTS）
+  const FF_PS = { mincho: "MS-Mincho", gothic: "MS-Gothic", yumincho: "YuMincho-Regular", yugothic: "YuGothic-Regular", meiryo: "Meiryo",
+    bizmincho: "BIZ-UDMincho-Medium", bizgothic: "BIZ-UDGothic", century: "Century", times: "TimesNewRomanPSMT", arial: "ArialMT" };
   async function prepareFonts(doc) {
     const fk = await loadFontkit();
-    const mk = font => ({ font, chars: new Set(font.getCharacterSet()) });
+    const mk = mkFont;
     try {
-      const api = n => `${N._S.base || ""}/api/notes/sysfont?name=${n}`;
-      const [se, yu] = await Promise.all([getBytes("segoe", api("segoe-ui")), getBytes("yugothic", api("yugothic-ui"))]);
+      const [se, yu] = await Promise.all([sysBytes("segoe-ui", "SegoeUI"), sysBytes("yugothic-ui", "YuGothicUI-Regular")]);
       doc.registerFontkit(fk);
       const fSe = await doc.embedFont(se, { subset: true });
       doc.registerFontkit({ create: b => fk.create(b, "YuGothicUI-Regular") });   // 書体のまとめファイル（.ttc）から Yu Gothic UI を選ぶ
@@ -187,15 +211,20 @@ window.Notes = window.Notes || {};
     ctx.save();
     ctx.font = `${fs}px ${family}`; ctx.fillStyle = color; ctx.textBaseline = "middle";
     const lh = fs * 1.5;
+    // 行の真ん中から文字の基準線までの距離（画面の書体の上下の高さで測る。画面と同じ高さに書くため）
+    ctx.textBaseline = "alphabetic";                 // 上下の高さは基準線から測る（"middle" のままだと真ん中から測ってしまう）
+    const fm = ctx.measureText("あA");
+    ctx.textBaseline = "middle";
+    const bo = fm.fontBoundingBoxAscent != null ? (fm.fontBoundingBoxAscent - fm.fontBoundingBoxDescent) / 2 : null;
     const lines = screenLines(o, maxW) || wrapLines(ctx, o.text, maxW, fs);
     lines.forEach(ln => {
       const cy = y + ln.cy;
       if (clipH != null && cy - lh / 2 > clipH) return;
       let run = null;
       ln.ch.forEach(({ c, x: cx }) => {
-        const f = T.pick(c);                                           // この字を入れる書体（なければ null）
+        const f = T.pick(c, o.ff);                                           // この字を入れる書体（なければ null）
         if (f) {
-          if (!run || run.font !== f) { run = { text: "", font: f, x: x + cx, cy, fs, color, rot: o.rot || 0, box, n: 0 }; T.runs.push(run); }
+          if (!run || run.font !== f) { run = { text: "", font: f, x: x + cx, cy, bo, fs, color, rot: o.rot || 0, box, n: 0 }; T.runs.push(run); }
           run.text += c; run.n++; run.lastX = x + cx; run.lastC = c;     // 最後の文字の位置（画面と同じ幅にそろえるため）
         } else {
           run = null;
@@ -242,13 +271,13 @@ window.Notes = window.Notes || {};
         ctx.save();
         roundRect(ctx, x, y, w, h, 3); ctx.fillStyle = P.col(fr.noteCss(o.fill)); ctx.fill();
         ctx.clip();
-        layoutText(ctx, o, x + 12, y + 10, w - 24, o.fs || 14, o.tc && o.tc !== "ink" ? P.col(fr.strokeCss(o.tc)) : "#3a3200", P, y + h, T, box);
+        layoutText(ctx, o, x + 12, y + 10, w - 24, o.fsr ? o.fsr * Wd : o.fs || 14, o.tc && o.tc !== "ink" ? P.col(fr.strokeCss(o.tc)) : "#3a3200", P, y + h, T, box);
         ctx.restore();
       });
       return;
     }
     if (o.kind === "text") {
-      withRot(ctx, x, y, w, h, rot, () => layoutText(ctx, o, x + 4, y + 2, w - 8, o.fs || 16, P.col(fr.strokeCss(o.tc || "ink")), P, null, T, box));
+      withRot(ctx, x, y, w, h, rot, () => layoutText(ctx, o, x + 4, y + 2, w - 8, o.fsr ? o.fsr * Wd : o.fs || 16, P.col(fr.strokeCss(o.tc || "ink")), P, null, T, box));
       return;
     }
     if (o.kind === "icon") return drawIcon(ctx, o, x, y, w, h, rot, s, P);
@@ -312,7 +341,7 @@ window.Notes = window.Notes || {};
     runs.forEach(r => {
       const font = r.font, size = r.fs * u;
       const asc = font.heightAtSize(size, { descender: false }), desc = font.heightAtSize(size) - asc;
-      let bx = r.x, by = r.cy + (asc - desc) / 2 / u;            // 基準線（画面の px）
+      let bx = r.x, by = r.cy + (r.bo != null ? r.bo : (asc - desc) / 2 / u);   // 基準線（画面の px）。測れたときは画面の書体の高さで
       if (r.rot) {                                                 // 図形の回転（画面では右回り）を、中心のまわりに
         const cx = r.box.x + r.box.w / 2, cy = r.box.y + r.box.h / 2, a = r.rot * Math.PI / 180;
         const dx = bx - cx, dy = by - cy;
@@ -344,7 +373,22 @@ window.Notes = window.Notes || {};
       try { const r = await prepareFonts(doc); fonts = r.list; textNote = r.note; }
       catch (e) { fonts = []; textNote = "（書体を読めなかったため、文字は絵として入れました）"; }
     }
-    const pick = c => { const cp = c.codePointAt(0); const f = fonts.find(x => x.chars.has(cp)); return f ? f.font : null; };
+    // 書体を選んだ付箋・テキスト（ff）の書体も入れる。見つからないときは標準の書体
+    const extra = new Map(), missing = [];
+    const ffs = new Set(items.filter(o => (o.kind === "note" || o.kind === "text") && o.text && FF_PS[o.ff]).map(o => o.ff));
+    if (ffs.size) {
+      const fk = await loadFontkit();
+      for (const ff of ffs) {
+        try { extra.set(ff, await embedSys(doc, fk, ff, FF_PS[ff])); }
+        catch (e) { missing.push((F().FONTS[ff] || [ff])[0]); }
+      }
+      if (missing.length) textNote += `（${missing.join("・")}が見つからなかったため、その文字は標準の書体で入れました）`;
+    }
+    const pick = (c, ff) => {
+      const cp = c.codePointAt(0), e = ff && extra.get(ff);
+      if (e && e.chars.has(cp)) return e.font;
+      const f = fonts.find(x => x.chars.has(cp)); return f ? f.font : null;
+    };
     const P = makeProbe();
     let pages = 0, texts = 0;
     try {

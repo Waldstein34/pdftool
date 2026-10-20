@@ -177,6 +177,7 @@ html[data-pt-theme="glass"] .pt-app .pt-tools .nb-tool{border-radius:10px}
 html[data-pt-theme="chrome"] .pt-app .pt-tools .nb-tool{border-radius:50%}
 .pt-app:not([data-pt-labels]) .pt-tools .nb-tool-hint{display:none}
 .pt-tools .nb-tool-opts{gap:6px}
+.pt-tools .pt-fmatch{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--pt-text2);white-space:nowrap;cursor:pointer}
 /* 設定（ペンの色・太さなど）が無いときは、設定の板を出さない */
 .pt-tools .nb-tool-opts:not(:has(> :not(.nb-tool-hint))){display:none}
 .pt-app:not([data-pt-labels]) .pt-tools .nb-tool-opts:not(:has(> :not(.nb-tool-hint))){display:none}

@@ -405,6 +405,7 @@ body.nb-nosel{user-select:none;cursor:grabbing}
 .nb-fmenu{width:236px}
 .nb-swrow{display:flex;gap:4px;padding:2px 6px 6px;flex-wrap:wrap}
 .nb-swrow .nb-csw{width:auto;min-width:34px;padding:0 4px}
+.nb-fontsel{display:block;width:calc(100% - 12px);margin:2px 6px 6px;padding:4px 6px;border:1px solid var(--nb-line);border-radius:6px;background:var(--nb-paper);color:var(--nb-text);font:inherit;font-size:13px}
 
 
 /* ---------------- 4b：手書き（ペン・消しゴム・投げ縄） ---------------- */

@@ -12,6 +12,8 @@
    ・動かすとき、notes_guide.js があれば整列ガイド（端・中央にそろえて吸い付く）を使う
    データ（ページの free）：
      箱の形 { id, kind:"rect|ellipse|triangle|note|text|ink", anchor, x, dy, w, h, rot, z, stroke, fill, sw, tc, fs, text, (ink: pen, pts) }
+       付箋・テキストの ff＝書体（FONTS の名前。なければ標準）、fsr＝PDF の上での文字の大きさ（ページの幅を1とした割合。拡大縮小についていく）
+       tc は色の名前のほか "#rrggbb" も使える（PDF の文字の色に合わせたとき）
      線     { id, kind:"line|arrow", anchor, p1:{x,dy}, p2:{x,dy}, z, stroke, sw }
    図形の一覧そのものは Notes.Editor が持つ（本文と同じ「元に戻す」の履歴に入れるため）。
    位置の計算は「紙の上の座標（abs, px）」を中心に行い、保存するときだけ結びつけ先の単位に直す（getAbs / setAbs）。
@@ -25,6 +27,15 @@ window.Notes = window.Notes || {};
   const esc = s => N._esc(s);
   const rid = () => "f" + Math.random().toString(16).slice(2, 11);
   const COLORS = ["gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"];
+  // 書体（ff）：名前 → [見出し, 画面の書体]。書体にない文字は標準の書体で出す（書き込みごと保存も同じ順で選ぶ）
+  const FONTS = {
+    mincho: ["ＭＳ 明朝", "'MS Mincho','ＭＳ 明朝'"], gothic: ["ＭＳ ゴシック", "'MS Gothic','ＭＳ ゴシック'"],
+    yumincho: ["游明朝", "'Yu Mincho','游明朝'"], yugothic: ["游ゴシック", "'Yu Gothic','游ゴシック'"], meiryo: ["メイリオ", "Meiryo,'メイリオ'"],
+    bizmincho: ["BIZ UD明朝", "'BIZ UDMincho'"], bizgothic: ["BIZ UDゴシック", "'BIZ UDGothic'"],
+    century: ["Century", "Century"], times: ["Times New Roman", "'Times New Roman'"], arial: ["Arial", "Arial"],
+  };
+  const fontCss = ff => FONTS[ff] ? `${FONTS[ff][1]},var(--nb-font,sans-serif)` : "";
+  const PT_SIZES = [8, 9, 10, 10.5, 11, 12, 14, 16, 18, 20, 24, 28, 36];     // PDF の上の文字の大きさ（pt。Word と同じ並び）
   const TOOLS = [
     ["text", "✎", "文章"], ["select", "↖", "選択"], null,
     ["pen", "✒", "ペン"], ["eraser", "⌫", "消しゴム"], ["lasso", "⬚", "投げ縄"], null,
@@ -41,6 +52,7 @@ window.Notes = window.Notes || {};
   const kindRender = {};     // 種類 → (o, 表示の箱) => 中身の HTML（大きさが変わるたびに作り直す）
   const toolHandlers = {};   // 道具 → (pointerdown のイベント) => void
   const optionBars = {};     // 道具 → (入れ物) => void（道具バーの右側に設定を出す）
+  const createHooks = [];    // PDF の上に付箋・テキストを置いたとき (o, { fx, fy：押した所（ページの幅を1とした割合）, small, frame }) => void
 
   let V = null;              // 今のページの部品 { scroll, page, title, blocks, tools, layer, ro }
   let mode = "text", editing = null;
@@ -53,7 +65,7 @@ window.Notes = window.Notes || {};
 
   /* ---------------- 色（名前 → テーマの色） ---------------- */
   // ink＝標準（テーマの文字色）、black・white＝テーマに関係なく真っ黒・真っ白
-  const strokeCss = c => c === "none" ? "transparent" : c === "ink" || !c ? "var(--nb-text)" : c === "white" ? "#fff" : c === "black" ? "#000" : `var(--nb-c-${c})`;
+  const strokeCss = c => /^#[0-9a-f]{6}$/i.test(c || "") ? c : c === "none" ? "transparent" : c === "ink" || !c ? "var(--nb-text)" : c === "white" ? "#fff" : c === "black" ? "#000" : `var(--nb-c-${c})`;
   const fillCss = c => !c || c === "none" ? "transparent" : c === "paper" ? "var(--nb-paper)" : c === "white" ? "#fff" : `var(--nb-h-${c})`;
   const noteCss = c => `var(--nb-n-${COLORS.includes(c) ? c : "yellow"})`;
 
@@ -170,9 +182,9 @@ window.Notes = window.Notes || {};
     if (LINE.has(o.kind) || kindRender[o.kind]) return d;
     if (o.kind === "note") {
       d.style.background = noteCss(o.fill);
-      d.innerHTML = `<div class="nb-fotx" style="font-size:${o.fs || 14}px;color:${o.tc && o.tc !== "ink" ? strokeCss(o.tc) : "#3a3200"}">${textHtml(o.text)}</div>`;
+      d.innerHTML = `<div class="nb-fotx" style="font-size:${o.fs || 14}px;${o.ff ? `font-family:${fontCss(o.ff)};` : ""}color:${o.tc && o.tc !== "ink" ? strokeCss(o.tc) : "#3a3200"}">${textHtml(o.text)}</div>`;
     } else if (o.kind === "text") {
-      d.innerHTML = `<div class="nb-fotx" style="font-size:${o.fs || 16}px;color:${strokeCss(o.tc || "ink")}">${textHtml(o.text)}</div>`;
+      d.innerHTML = `<div class="nb-fotx" style="font-size:${o.fs || 16}px;${o.ff ? `font-family:${fontCss(o.ff)};` : ""}color:${strokeCss(o.tc || "ink")}">${textHtml(o.text)}</div>`;
     } else d.innerHTML = shapeSvg(o);
     return d;
   }
@@ -190,6 +202,10 @@ window.Notes = window.Notes || {};
     d.style.height = o.kind === "text" ? "auto" : b.h + "px";
     d.style.minHeight = o.kind === "text" ? b.h + "px" : "";
     if (kindRender[o.kind]) d.innerHTML = kindRender[o.kind](o, b);
+    if (o.fsr && (o.kind === "note" || o.kind === "text")) {      // PDF の上の文字は、ページの幅に合わせた大きさ
+      const f = frame(o.anchor), tx = d.querySelector(".nb-fotx");
+      if (f && f.pdf && tx) tx.style.fontSize = o.fsr * f.s + "px";
+    }
     return b;
   }
   const elOf = id => V.layer.querySelector(`.nb-fo[data-id="${id}"]`);
@@ -340,6 +356,11 @@ window.Notes = window.Notes || {};
       else { o.stroke = "ink"; o.fill = "none"; o.sw = 2; }
     }
     add(o, abs, { x: sx, y: sy });
+    const f = o.fs && frame(o.anchor);
+    if (f && f.pdf) {          // PDF の上では、文字の大きさもページの幅に対する割合で覚える（拡大縮小についていく）
+      o.fsr = Math.round(o.fs / f.s * 100000) / 100000;
+      createHooks.forEach(h => h(o, { fx: (sx - f.ox) / f.s, fy: (sy - f.oy) / f.s, small, frame: f }));   // pdf_font.js：近くの文字に合わせる
+    }
     E().changed();
     setMode("select");
     sel = new Set([o.id]);
@@ -486,10 +507,28 @@ window.Notes = window.Notes || {};
           p.appendChild(row);
         }
         if (o.kind === "text" || o.kind === "note") {
-          p.insertAdjacentHTML("beforeend", `<div class="cat">文字の大きさ</div>`);
-          const row = el("div", "nb-swrow");
-          [12, 14, 16, 20, 28, 40].forEach(f => { const b = el("button", "nb-csw" + ((o.fs || 16) === f ? " cur" : ""), `<span style="font-size:${Math.min(f, 20)}px">${f}</span>`); b.onclick = () => commit(oo => { oo.fs = f; }); row.appendChild(b); });
-          p.appendChild(row);
+          // 書体（Word と同じく一覧から選ぶ）
+          p.insertAdjacentHTML("beforeend", `<div class="cat">書体</div>`);
+          const fs = el("select", "nb-fontsel");
+          fs.innerHTML = `<option value="">標準</option>` + Object.entries(FONTS).map(([k, v]) => `<option value="${k}"${o.ff === k ? " selected" : ""} style="font-family:${v[1]}">${v[0]}</option>`).join("");
+          fs.onchange = () => commit(oo => { if (fs.value) oo.ff = fs.value; else delete oo.ff; });
+          p.appendChild(fs);
+          // 大きさ：PDF の上で、ページの大きさ（pt）が分かるときは pt で選ぶ（拡大縮小についていく）
+          const f = frame(o.anchor), pg = f && f.pdf ? pdfPage(o.anchor) : null, pw = pg ? +pg.dataset.pw || 0 : 0;
+          if (pw) {
+            p.insertAdjacentHTML("beforeend", `<div class="cat">文字の大きさ（pt）</div>`);
+            const ss = el("select", "nb-fontsel"), now = o.fsr ? Math.round(o.fsr * pw * 10) / 10 : 0;
+            const sizes = PT_SIZES.includes(now) || !now ? PT_SIZES : PT_SIZES.concat(now).sort((a, b) => a - b);
+            ss.innerHTML = sizes.map(v => `<option value="${v}"${v === now ? " selected" : ""}>${v}</option>`).join("");
+            ss.onchange = () => commit(oo => { oo.fsr = Math.round(+ss.value / pw * 100000) / 100000; });
+            p.appendChild(ss);
+          } else {
+            p.insertAdjacentHTML("beforeend", `<div class="cat">文字の大きさ</div>`);
+            const row = el("div", "nb-swrow");
+            const cur = o.fsr && f && f.pdf ? Math.round(o.fsr * f.s) : (o.fs || 16);
+            [12, 14, 16, 20, 28, 40].forEach(v => { const b = el("button", "nb-csw" + (cur === v ? " cur" : ""), `<span style="font-size:${Math.min(v, 20)}px">${v}</span>`); b.onclick = () => commit(oo => { oo.fs = v; if (f && f.pdf) oo.fsr = Math.round(v / f.s * 100000) / 100000; }); row.appendChild(b); });
+            p.appendChild(row);
+          }
         }
       }
       p.appendChild(el("hr"));
@@ -622,6 +661,6 @@ window.Notes = window.Notes || {};
     get mode() { return mode; }, get selected() { return [...sel][0] || null; }, get selection() { return [...sel]; },
     // notes_ink.js などが使う窓口
     _: { list, find, getAbs, setAbs, reanchor, boxOf, add, elOf, measure, strokeCss, fillCss, noteCss, lineSvg, layerRect: () => (measure(), LR), parts: () => V,
-         get layer() { return V && V.layer; }, kindRender, toolHandlers, optionBars, drawTools, COLORS },
+         get layer() { return V && V.layer; }, kindRender, toolHandlers, optionBars, createHooks, drawTools, COLORS, FONTS, fontCss, frame, pdfPage },
   };
 })();

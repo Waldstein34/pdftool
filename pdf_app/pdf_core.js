@@ -264,7 +264,7 @@
     U.pages.innerHTML = "";
     S.io = new IntersectionObserver(onSee, { root: U.view, rootMargin: "800px 0px" });
     for (const p of pages) {
-      p.el = el("div", "pt-page nb-pdf-page"); p.el.dataset.n = p.n;
+      p.el = el("div", "pt-page nb-pdf-page"); p.el.dataset.n = p.n; p.el.dataset.pw = p.w;   // pw＝ページの幅（pt）。書き込みの文字の大きさを pt で選ぶときに使う
       U.pages.appendChild(p.el);
       S.io.observe(p.el);
     }
@@ -362,7 +362,7 @@
 
   function drop(p) {   // 遠く離れたページは片づけて、メモリを空ける
     if (p.task) try { p.task.cancel(); } catch (e) { /* 止めるだけ */ }
-    p.task = null; p.rs = 0; p.divs = null; p.strs = null; p.occ = [];
+    p.task = null; p.rs = 0; p.divs = null; p.strs = null; p.cv = null; p.occ = [];
     p.el.innerHTML = "";
   }
 
@@ -391,13 +391,14 @@
     const divs = [], strs = [];
     try {
       const tc = await p.page.getTextContent();
+      p.tc = tc;                 // 文字の書体・大きさを調べるとき用（pdf_font.js）
       if (my !== S.gen || p.rs !== scale) return;
       await lib.renderTextLayer({ textContentSource: tc, container: tl, viewport: vpCss, textDivs: divs, textContentItemsStr: strs }).promise;
     } catch (e) { /* 文字の層がなくても絵は見せる */ }
     if (my !== S.gen || p.rs !== scale) return;
     p.el.innerHTML = "";
     p.el.append(cv, tl);
-    p.divs = divs; p.strs = strs;
+    p.divs = divs; p.strs = strs; p.cv = cv;
     markHits(p);
     paintSel();
   }

@@ -249,6 +249,7 @@
   }
   P.convert = id => convert(KINDS.find(k => k.id === id));
   P.convertKinds = KINDS;
+  P.pickFont = pickFont;      // 書体の見分け方（pdf_font.js も使う）
 
   P.hooks.convert.push(btn => {
     if (!N || !N._openPop) return;
