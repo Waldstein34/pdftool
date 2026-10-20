@@ -1,8 +1,8 @@
 /* sw.js ― オフラインでも開けるようにする係（service worker）
    画面の部品は、まず手元の写しを出し、裏で新しいものに入れ替える（次に開いたときに新しくなる）。
    VERSION と CORE は build_public.py が書き込む。 */
-const VERSION = "901b805379ad";
-const CORE = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "pdf_app/pdf.css", "pdf_app/pdf_core.js", "pdf_app/pdf_write.js", "pdf_app/pdf_bridge.js", "pdf_app/pdf_io_browser.js", "pdf_app/pdf_theme.js", "pdf_app/pdf_print.js", "pdf_app/pdf_convert.js", "notes_app/notes.css", "notes_app/notes_free.js", "notes_app/notes_guide.js", "notes_app/notes_ink.js", "notes_app/notes_icons_std.js", "notes_app/notes_icons.js", "notes_app/notes_pdfout.js", "notes_app/vendor/pdf.min.js", "notes_app/vendor/pdf.worker.min.js"];
+const VERSION = "fb89bee92318";
+const CORE = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "pdf_app/pdf.css", "pdf_app/pdf_core.js", "pdf_app/pdf_write.js", "pdf_app/pdf_bridge.js", "pdf_app/pdf_io_browser.js", "pdf_app/pdf_theme.js", "pdf_app/pdf_print.js", "pdf_app/pdf_convert.js", "pdf_app/pdf_pages.js", "pdf_app/pdf_markup.js", "notes_app/notes.css", "notes_app/notes_free.js", "notes_app/notes_guide.js", "notes_app/notes_ink.js", "notes_app/notes_icons_std.js", "notes_app/notes_icons.js", "notes_app/notes_pdfout.js", "notes_app/vendor/pdf.min.js", "notes_app/vendor/pdf.worker.min.js"];
 const CACHE = "pdftool-" + VERSION;
 
 self.addEventListener("install", e => {

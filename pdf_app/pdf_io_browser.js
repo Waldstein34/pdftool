@@ -191,7 +191,7 @@
         catch (e) { if (e.name === "AbortError") return { cancelled: true }; throw e; }
         const w = await h.createWritable();
         await w.write(bytes); await w.close();
-        return { ok: true, name: h.name, message: `「${h.name}」を保存しました` };
+        return { ok: true, name: h.name, handle: h, message: `「${h.name}」を保存しました` };
       }
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([bytes], { type: mime }));
@@ -200,6 +200,18 @@
       setTimeout(() => URL.revokeObjectURL(a.href), 60000);
       return { ok: true, name, message: `「${name}」をダウンロードに保存しました` };
     },
+    // 元の PDF に上書きする。ファイルの手がかりがあれば書き込みの許可を聞いてそのまま、なければダウンロード
+    async overwrite(ref, bytes) {
+      const h = ref && ref.handle;
+      if (h && h.createWritable) {
+        if (!await ensurePerm(h, "readwrite")) return { cancelled: true };
+        const w = await h.createWritable();
+        await w.write(bytes); await w.close();
+        return { ok: true, name: h.name, message: `「${h.name}」に上書き保存しました` };
+      }
+      return this.saveFile(ref, (ref && ref.name) || "document.pdf", bytes);
+    },
+    refOf: w => (w.handle ? { id: rid(), name: w.name, handle: w.handle } : null),
     alive: async () => true,
     downMessage: "",
     // アプリとして入れたとき：PDF をダブルクリックしたら、そのファイルを受け取って開く

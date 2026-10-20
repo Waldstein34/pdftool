@@ -20,7 +20,7 @@
     q: "", hits: [], hitIdx: -1, texts: null, wantScroll: false,
   };
   // 機能を足す窓口（pdf_write.js が書き込みを付ける）。open({buf, key, name, ref, url}) / close() / layout() / save()
-  const hooks = P.hooks = { open: [], close: [], layout: [], save: [], page: [], theme: [], mount: [], print: [], convert: [] };
+  const hooks = P.hooks = { open: [], close: [], layout: [], save: [], page: [], theme: [], mount: [], print: [], convert: [], pages: [], thumbs: [], select: [] };
   const fire = (k, ...a) => hooks[k].forEach(f => { try { f(...a); } catch (e) { console.error(e); } });
   const ZOOMS = [0.25, 0.33, 0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5];
 
@@ -38,6 +38,7 @@
     moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
     file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M10 13H8M16 17H8M16 13h-2"/>',
     check: '<path d="M20 6 9 17l-5-5"/>',
+    pages: '<rect x="8" y="2" width="13" height="16" rx="2"/><path d="M4 6v14a2 2 0 0 0 2 2h10"/>',
     convert: '<path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M4 7V4a2 2 0 0 1 2-2h8l6 6v12a2 2 0 0 1-2 2h-4"/><path d="m5 11-3 3 3 3M9 17l3-3-3-3M2 14h10"/>',
     print: '<path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
   };
@@ -92,6 +93,7 @@
         <span class="pt-sep pt-doc"></span>
         <span class="pt-name pt-doc"></span>
         <button class="pt-ic pt-doc" data-a="close" title="閉じて最初の画面へ">${I("x")}</button>
+        <span class="pt-dirty pt-doc" hidden></span>
         <span class="pt-grow"></span>
         <span class="pt-grp pt-doc"><button class="pt-ic" data-a="prev" title="前のページ（←）">${I("prev")}</button><input class="pt-pgin" inputmode="numeric" aria-label="ページ"><span class="pt-of">/ <span class="pt-total"></span></span><button class="pt-ic" data-a="next" title="次のページ（→）">${I("next")}</button></span>
         <span class="pt-sep pt-doc"></span>
@@ -99,6 +101,7 @@
         <span class="pt-grow pt-grow2"></span>
         <span class="pt-slot pt-slot-top pt-doc"></span>
         <span class="pt-search pt-doc">${I("search")}<input placeholder="PDFの中を検索" title="Enter で次、Shift＋Enter で前（Ctrl＋F）"><span class="pt-hits"></span><button data-a="sprev" title="前">${I("up")}</button><button data-a="snext" title="次">${I("down")}</button></span>
+        <button class="pt-ic pt-doc" data-a="pages" title="ページの操作（回転・削除・挿入・結合・分割）">${I("pages")}</button>
         <button class="pt-btn pt-doc" data-a="save" title="書き込みを重ねた PDF を保存（元の PDF はそのまま）">${I("save")}<span class="pt-lbl">書き込みごと保存</span></button>
         <button class="pt-ic pt-doc" data-a="convert" title="ほかの形に変換して保存（PowerPoint など）">${I("convert")}</button>
         <button class="pt-ic pt-doc" data-a="print" title="印刷（Ctrl＋P）。書き込みがあれば書き込みごと">${I("print")}</button>
@@ -146,7 +149,7 @@
       if (!b || b.disabled) return;
       const a = b.dataset.a;
       if (a === "open") pick();
-      else if (a === "close") closeDoc();
+      else if (a === "close") { if (!P.confirmLeave || P.confirmLeave()) closeDoc(); }
       else if (a === "side") { app.classList.toggle("pt-side-off"); relayout(); }
       else if (a === "prev") goTo(S.cur - 1);
       else if (a === "next") goTo(S.cur + 1);
@@ -155,6 +158,7 @@
       else if (a === "save") fire("save");
       else if (a === "print") fire("print");
       else if (a === "convert") fire("convert", b);
+      else if (a === "pages") fire("pages", b);
       else if (a === "theme") fire("theme", b);
       else if (a === "snext") search(1);
       else if (a === "sprev") search(-1);
@@ -215,14 +219,16 @@
   }
 
   // f＝{buf（中身）, name（名前）, ref（居場所。わからなければ null）}
-  async function openData(f, page) {
+  // opts.reload＝ページの操作のあとに開き直す（目印 key と居場所は元のまま、書き込みは opts.free を使う）
+  async function openData(f, page, opts = {}) {
+    if (!opts.reload && P.confirmLeave && !P.confirmLeave()) return false;
     const { buf, name, ref } = f;
     closeDoc(true);
     const my = ++S.gen;
     const U = S.ui;
     // PDF の中身から目印（SHA-256）を作る。書き込みはこの目印で PDF に結びつける（名前・場所が変わっても戻る）
     // ※ pdf.js に渡すと中身が移されて空になるので、その前に作る
-    const key = [...new Uint8Array(await crypto.subtle.digest("SHA-256", buf))].map(b => b.toString(16).padStart(2, "0")).join("");
+    const key = opts.key || [...new Uint8Array(await crypto.subtle.digest("SHA-256", buf))].map(b => b.toString(16).padStart(2, "0")).join("");
     const url = URL.createObjectURL(new Blob([buf], { type: "application/pdf" }));   // 書き込みごと保存で読み直すとき用
     const copy = buf.slice(0);
     S.root.classList.add("pt-has-doc");
@@ -267,8 +273,8 @@
     buildOutline(my);
     relayout();
     goTo(Math.min(Math.max(1, page || 1), doc.numPages), true);
-    fire("open", { buf: copy, key, name, ref, url });
-    io().opened(ref, { key });
+    fire("open", { buf: copy, key, name, ref, url, reload: !!opts.reload, free: opts.free });
+    if (!opts.reload) io().opened(ref, { key });
     return true;
   }
   P.open = openData;
@@ -397,6 +403,7 @@
   }
 
   /* ---------------- ページ移動 ---------------- */
+  P.goTo = (n, instant) => goTo(n, instant);
   function goTo(n, instant) {
     if (!S.doc) return;
     n = Math.min(Math.max(1, n), S.pages.length);
@@ -457,10 +464,11 @@
     for (const p of S.pages) {
       const th = el("div", "pt-th", `<div class="pt-thp"><canvas style="aspect-ratio:${p.w}/${p.h}"></canvas></div>${p.n}`);
       th.dataset.n = p.n;
-      th.addEventListener("click", () => goTo(p.n));
+      th.addEventListener("click", e => { if (P.thumbClick) P.thumbClick(e, p.n); else goTo(p.n); });
       box.appendChild(th);
       S.tio.observe(th);
     }
+    fire("thumbs", box);
   }
 
   async function buildOutline(my) {
@@ -538,11 +546,11 @@
 
   /* ---------------- 選んだ文字の帯 ---------------- */
   // かたまり（span）ごとに、選ばれている部分の四角を集め、同じ行のものを1本にまとめて描く
-  function paintSel() {
-    if (!S.root) return;
-    S.root.querySelectorAll(".pt-selbar").forEach(b => b.remove());
+  // 選んでいる文字の範囲を、ページごとの「行の四角」（ページの左上からの px）にまとめて返す
+  function selLines() {
+    const out = [];
     const sel = getSelection();
-    if (!sel || !sel.rangeCount || sel.isCollapsed || !S.doc) return;
+    if (!sel || !sel.rangeCount || sel.isCollapsed || !S.doc) return out;
     const range = sel.getRangeAt(0);
     for (const p of S.pages) {
       if (!p.divs || !p.el.isConnected || !range.intersectsNode(p.el)) continue;
@@ -569,12 +577,24 @@
         if (ln) { ln.l = Math.min(ln.l, x.l); ln.r = Math.max(ln.r, x.r); ln.t = Math.min(ln.t, x.t); ln.b = Math.max(ln.b, x.b); }
         else lines.push({ ...x });
       }
-      for (const L of lines) {
+      if (lines.length) out.push({ n: p.n, width: pr.width, height: pr.height, lines });
+    }
+    return out;
+  }
+  P.selLines = selLines;
+  // 選んだ文字の帯を、1行ずつ1本で描く
+  function paintSel() {
+    if (!S.root) return;
+    S.root.querySelectorAll(".pt-selbar").forEach(b => b.remove());
+    for (const pg of selLines()) {
+      const p = S.pages[pg.n - 1];
+      for (const L of pg.lines) {
         const bar = el("div", "pt-selbar");
         Object.assign(bar.style, { left: L.l + "px", top: L.t + "px", width: L.r - L.l + "px", height: L.b - L.t + "px" });
         p.el.appendChild(bar);
       }
     }
+    fire("select");
   }
 
   // 1ページの文字の層に、見つかった所の印を付ける

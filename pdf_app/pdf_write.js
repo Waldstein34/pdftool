@@ -36,6 +36,8 @@
   async function flush(keep) {
     clearTimeout(saveT);
     if (!dirty || !cur) return;
+    // ページの操作が未保存の間は、書き込みを保存しない（ページの番号が元のファイルと食い違うため。保存のときにまとめて残す）
+    if (P.pagesDirty && P.pagesDirty()) return;
     dirty = false;
     const c = cur;
     try {
@@ -55,7 +57,8 @@
   P.hooks.open.push(async ctx => {
     cur = { key: ctx.key, name: ctx.name, ref: ctx.ref, url: ctx.url };
     let items = [];
-    try {
+    if (ctx.reload) items = ctx.free || [];          // ページの操作のあと：付け替え済みの書き込みをそのまま使う
+    else try {
       const r = await io().annGet(ctx.key, ctx.ref, ctx.name);
       if (cur !== null && cur.key === ctx.key && r.free && r.free.length) {
         if (r.matched === "key") items = r.free;

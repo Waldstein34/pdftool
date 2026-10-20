@@ -252,6 +252,8 @@ window.Notes = window.Notes || {};
       return;
     }
     if (o.kind === "icon") return drawIcon(ctx, o, x, y, w, h, rot, s, P);
+    // ほかの種類（PDF ツールの文字の印 mark など）は、画面と同じ描き方（kindRender）の SVG をそのまま焼き付ける
+    if (fr.kindRender[o.kind]) return drawSvg(ctx, fr.kindRender[o.kind](o, { w, h }), x, y, w, h, rot, s, P);
   }
   /* アイコン：画面に出ている形（SVG・画像・文字の部品・絵文字）をそのまま使う */
   async function drawIcon(ctx, o, x, y, w, h, rot, s, P) {
